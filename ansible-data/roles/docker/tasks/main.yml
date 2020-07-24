@@ -1,0 +1,28 @@
+---
+# roles/docker/tasks/main.yml
+
+- name: Install docker
+  package:
+    name: docker.io
+    state: latest
+
+
+- name: Download docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/{{ docker_compose_latest }}/docker-compose-{{ ansible_system }}-{{ ansible_architecture }}
+    dest: /usr/local/bin/docker-compose
+    mode: 0755
+
+
+- name: Create docker-compose symlink to /usr/bin
+  file:
+    src: /usr/local/bin/docker-compose
+    dest: /usr/bin/docker-compose
+    owner: root
+    group: root
+    state: link
+
+
+- name: Update repositories cache
+  apt:
+    update_cache: yes

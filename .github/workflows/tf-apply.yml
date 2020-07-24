@@ -1,0 +1,59 @@
+name: 'Terraform Apply'
+
+on:
+  workflow_dispatch:
+  push:
+    branches: 
+      - master
+
+jobs:
+    terraform-apply:
+        name: "Terraform Apply"
+        runs-on: ubuntu-latest
+        
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+            
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v1
+       
+            - name: Terraform Init
+              id: init
+              run: terraform init
+              env:
+                  TF_CLI_ARGS_init: '-backend-config="access_key=${{ secrets.DIGITAL_OCEAN_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DIGITAL_OCEAN_SPACES_SECRET }}"'
+
+            - name: Terraform Apply
+              id: apply
+              run: terraform apply -auto-approve
+              env:
+                  TF_VAR_do_client_secret: "${{ secrets.DIGITAL_OCEAN_API_KEY }}"
+
+            - name: Install Ansible
+              id: ansible-install
+              run: |
+                sudo apt-add-repository ppa:ansible/ansible -y
+                sudo apt-get update
+                sudo apt-get install ansible
+
+            - name: Setup SSH
+              id: ssh
+              run: |
+                mkdir -p ~/.ssh/
+                echo "$PRIV_KEY_SSH" >> ~/.ssh/id_rsa
+                chmod 0600 ~/.ssh/id_rsa
+                eval $(ssh-agent -s)
+                ssh-add ~/.ssh/id_rsa
+                python --version
+              env:
+                  PRIV_KEY_SSH: "${{ secrets.PRIV_KEY_SSH }}"
+
+            - name: Run Ansible Playbooks
+              id: ansible
+              run: ansible-playbook site.yml -i hosts --private-key=~/.ssh/id_rsa
+              working-directory: ./ansible-data
+              env:
+                  ANSIBLE_HOST_KEY_CHECKING: False
+                  GITHUB_ACCESS_TOKEN: "${{ secrets.GH_ACCESS_TOKEN }}"
+                  GITHUB_USER: "${{ secrets.GH_USER }}"

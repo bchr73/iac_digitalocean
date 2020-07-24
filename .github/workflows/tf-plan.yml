@@ -1,0 +1,100 @@
+name: 'Terraform Plan'
+
+on: [pull_request]
+
+jobs:
+    terraform-plan:
+        name: "Terraform Plan"
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        runs-on: ubuntu-latest
+        
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v2
+              with:
+                ref: ${{ github.event.pull_request.head.ref }}
+            
+            - name: Setup Terraform
+              uses: hashicorp/setup-terraform@v1
+     
+            - name: Terraform fmt
+              id: fmt
+              run: terraform fmt
+            
+            - name: Check for modified files
+              id: git-check
+              run: echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
+      
+            - name: Push changes
+              if: steps.git-check.outputs.modified == 'true'
+              run: |
+                git config --global user.name 'Karim Boucher'
+                git config --global user.email 'bchr73@users.noreply.github.com'
+                git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+                git commit -am "Terraform auto-formatting"
+                git push
+            
+            - name: Terraform Init
+              id: init
+              run: terraform init
+              env:
+                  TF_CLI_ARGS_init: '-backend-config="access_key=${{ secrets.DIGITAL_OCEAN_SPACES_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.DIGITAL_OCEAN_SPACES_SECRET }}"'
+
+            - name: Terraform Validate
+              id: validate
+              run: terraform validate -no-color
+
+            - name: Terraform Plan
+              id: plan
+              run: terraform plan -refresh=true -no-color -detailed-exitcode
+              env:
+                  TF_VAR_do_client_secret: "${{ secrets.DIGITAL_OCEAN_API_KEY }}"
+              continue-on-error: true
+
+            - name: Check Terraform Plan
+              if: always()
+              id: plan-check
+              run: |
+                echo ::set-output name=check::$(if [[ ${{ steps.plan.outputs.exitcode }} == 1 ]]; then echo "failure"; else echo "success"; fi)
+
+            - name: Terraform Plan - Exit code
+              if: ${{ steps.plan.outputs.exitcode == 1 }}
+              run: exit 1
+
+            - name: Terraform Comment
+              if: always()
+              uses: actions/github-script@v2
+              env:
+                  FMT: "${{ steps.fmt.outputs.stderr }}\n${{ steps.fmt.outputs.stdout }}"
+                  INIT: "${{ steps.init.outputs.stderr }}\n${{ steps.init.outputs.stdout }}"
+                  VALIDATE: "${{ steps.validate.outputs.stderr }}\n${{ steps.validate.outputs.stdout }}"
+                  PLAN: "${{ steps.plan.outputs.stderr }}\n${{ steps.plan.outputs.stdout }}"
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const output = ` ### Report
+                      
+                      #### Terraform Format and Style - \`${{ steps.fmt.outcome }}\` - 🖌
+                      
+                      \`\`\`${process.env.FMT}\`\`\`
+                      
+                      #### Terraform Initialization - \`${{ steps.init.outcome }}\` - ⚙️
+
+                      \`\`\`${process.env.INIT}\`\`\`
+
+                      #### Terraform Validation - \`${{ steps.validate.outcome }}\` - 🤖
+                      
+                      \`\`\`${process.env.VALIDATE}\`\`\`
+                      
+                      #### Terraform Plan - \`${{ steps.plan-check.outputs.check }}\` - 📖
+                      
+                      \`\`\`${process.env.PLAN}\`\`\`
+                      
+                      *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.tf_actions_working_dir }}\`, Workflow: \`${{ github.workflow }}\`*`;
+                      
+                      github.issues.createComment({
+                        issue_number: context.issue.number,
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        body: output
+                      })

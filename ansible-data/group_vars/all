@@ -1,0 +1,4 @@
+---
+swap_file_path: /swapfile
+swap_file_size_mb: 1000
+docker_compose_latest: 1.26.2

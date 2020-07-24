@@ -1,0 +1,26 @@
+# site.yml
+
+# Apply common configuration to all hosts
+- hosts: all
+
+  roles:
+  - common
+  - docker
+
+- hosts: issuers
+
+  roles:
+  - git
+  - python
+
+- hosts: verifiers
+
+  roles:
+  - git
+  - python
+
+- hosts: explorers
+
+  roles:
+  - git
+  - python

@@ -1,0 +1,22 @@
+---
+# roles/docker/tasks/main.yml
+
+- name: Install python3
+  package:
+    name: python3
+
+- name: Install pip
+  package:
+    name: python3-pip
+
+- name: Pip install
+  pip:
+    name: flask
+
+- name: Run python app
+  shell:
+    cmd: nohup ./start.sh &
+    chdir: /opt/checkout
+  environment:
+    APP_NAME: "{{ app_name }}"
+    FLASK_APP: /opt/checkout/app.py

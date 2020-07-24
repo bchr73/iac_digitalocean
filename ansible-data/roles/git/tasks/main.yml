@@ -1,0 +1,13 @@
+---
+# roles/git/tasks/main.yml
+
+- name: Install git
+  package:
+    name: git
+    state: latest
+
+
+- name: Clone repo
+  git:
+    repo=https://{{ lookup('env', 'GITHUB_USER') | urlencode }}:{{ lookup('env','GITHUB_ACCESS_TOKEN') | urlencode }}@github.com/{{ repository }}.git
+    dest=/opt/checkout
